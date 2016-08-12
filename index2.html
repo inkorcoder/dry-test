@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Game</title>
+	<link rel="stylesheet" href="css/skin.min.css">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+
+</head>
+<body>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.4/jquery.min.js"></script>
+
+	<div class="cursor"></div>
+	<div class="message-box"></div>
+
+	<script src="js/three/three.js"></script>
+
+	<script>
+		var scene, camera, renderer, ambient, directional;
+		var mesh, geoCache={};
+		var clock, jsLoader, ddsLoader;
+
+		init();
+		animate();
+
+		function init() {
+		    
+		    scene = new THREE.Scene();
+		    
+		    camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 10000 );
+		    camera.position.z = -100;
+		    camera.position.y = 20;
+		    camera.lookAt(new THREE.Vector3(0,10,0));
+		    
+		    ambient = new THREE.AmbientLight(0xffffff);    
+		    scene.add(ambient);
+		    
+		    directional = new THREE.DirectionalLight(0xffffff,1);
+		    directional.position.set(1,1,0);
+		    scene.add(directional);
+		     
+		    clock = new THREE.Clock();
+		    
+		    jsLoader = new THREE.JSONLoader(true);    
+		    // ddsLoader = THREE.DDSLoader();
+		    
+		    renderer = new THREE.WebGLRenderer({antialias:true});
+		    renderer.setSize( window.innerWidth, window.innerHeight );
+		    renderer.setClearColor( 0x777777, 1 );
+		    
+		    // document.getElementById('Sprint_01').onclick = function(e){
+		    // 	play('Sprint_01',true);
+		    // };
+
+		    // document.getElementById('run').onclick = function(e){
+		    // 	play('Run',true);
+		    // };
+		    
+		    document.body.appendChild( renderer.domElement );
+		    
+		    // loadFloor();
+		    
+		    loadModel();
+		    
+		}
+
+		function createModel(json){
+		    
+		    var geo, geo2;
+		    
+		    if( geoCache[json.name] ){
+		        
+		        geo = geoCache[json.name];   
+		        
+		    }else{
+		    
+		        geo2 = jsLoader.parse(json).geometry;
+
+		        // for (var i = 0; i < geo2.vertices.length; i++) {
+		        //                 vector = geo2.vertices[i];
+		        //                 var axis = new THREE.Vector3(0, 1, 0);
+		        //                 var angle = Math.PI / 2;
+		        //                 geo2.vertices[i].applyAxisAngle(axis, angle);
+		        //                 geo2.vertices[i].multiplyScalar(0.01);
+		        //  }
+
+		        var m = new THREE.SkinnedMesh( geo2 );
+		        m.normalizeSkinWeights();
+		        geo2 = m.geometry;
+
+		        geo = new THREE.BufferGeometry().fromGeometry(geo2);
+		        geo.bones = geo2.bones;
+		        geo.animations = geo2.animations;
+		        
+		        geoCache[json.name] = geo;
+		        
+		    }
+		        
+		    
+		    var mat = new THREE.MeshPhongMaterial({skinning:true,side:THREE.DoubleSide,emissive:0x000000,color:0x000000});
+		    
+		    mesh = new THREE.SkinnedMesh(geo,mat);
+		    
+		    //mesh.scale.set(10,10,10);
+		    
+		    mesh.mixer = new THREE.AnimationMixer( mesh );
+		    
+		    parseAnimations();
+
+		    // scene.add(new THREE.Mesh(new THREE.BoxGeometry(10,10,10), new THREE.MeshNormalMaterial()));
+		    
+		    play('Sprint_01',true);
+		    
+		    scene.add(mesh);
+		    
+		    // camera.lookAt(new THREE.Vector3(mesh.position.x,mesh.position.y,mesh.position.z));
+		    
+		}
+
+		function loadModel(){
+		 
+		    $.ajax({
+
+		        url: 'models/woman.json',
+		        data: '',
+		        crossDomain: true,
+		        type: 'GET',
+		        success: function(response){
+		        		// console.log(response);
+		            createModel(response);
+		        }
+		        
+		    });    
+		    
+		}
+
+
+		function play(name,loop){
+			console.log(mesh.animations, name);
+
+		  var to = mesh.animations[ name ];
+
+		  if( mesh.currentAnimation ){
+
+		    var from = mesh.animations[ mesh.currentAnimation ];
+
+		    to.reset();
+
+		    if( loop ){
+
+		      to.setLoop(THREE.LoopRepeat);
+		      to.clampWhenFinished = false;
+
+		    }else{
+
+		      to.setLoop(THREE.LoopOnce, 0);
+		      to.clampWhenFinished = true;					
+
+		      mesh.mixer.addEventListener('finished',function(e){
+
+		        play('Sprint_01',true);
+
+		      });						
+
+		    }
+
+		    from.play();
+		    to.play();
+
+		    from.enabled = true;
+		    to.enabled = true;
+
+		    from.crossFadeTo( to, 0.3 );					
+
+		  }else{
+
+		    to.play();
+
+		  }
+
+		  mesh.currentAnimation = name;
+
+		}
+
+		function parseAnimations(){
+
+		  var o, anim, anims = {};
+		  
+		  console.log(mesh);
+
+		  for( var i=0,len=mesh.geometry.animations.length;i<len;i++){
+
+		    o = mesh.geometry.animations[i];
+		    if( o ){
+
+		      anim = mesh.mixer.clipAction(o,mesh);
+		      anim.setEffectiveWeight(1);
+
+		      anims[o.name] = anim;
+
+		    }
+
+		  }
+
+		  mesh.animations = anims;
+
+		}
+
+		function animate() {
+		    
+		    requestAnimationFrame( animate );
+		    
+		    var delta = clock.getDelta();
+		    
+		    if( mesh ){
+		    
+		    	if( mesh.mixer ){
+		    
+		    		mesh.mixer.update( delta );
+		      
+		    	}
+		      
+		     } 
+		    
+		    renderer.render( scene, camera );
+		    
+		}
+	</script>
+
+</html>
